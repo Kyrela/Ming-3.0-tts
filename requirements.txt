@@ -1,5 +1,8 @@
 # Ming-3.0-tts-0.5b runtime; docker/Dockerfile uses the same set.
 # Ming-3.0-tts-tiny needs a separate stack: see requirements-tiny.txt.
+# PyPI ships a CPU-only torch wheel on Windows; this index supplies the CUDA
+# build there and is ignored by platforms that have no matching wheel (aarch64).
+--extra-index-url https://download.pytorch.org/whl/cu124
 torch==2.6.0
 torchaudio==2.6.0
 transformers==4.46.3

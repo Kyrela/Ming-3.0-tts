@@ -49,7 +49,7 @@ def parse_args():
                         choices=tts_tasks.TASKS)
     parser.add_argument("--text", required=True)
     parser.add_argument("--output", required=True)
-    parser.add_argument("--device", default="cuda:0")
+    parser.add_argument("--device", default=None)
     parser.add_argument("--seed", type=int, default=1895)
 
     parser.add_argument("--language_id",

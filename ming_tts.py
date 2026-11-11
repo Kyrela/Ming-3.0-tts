@@ -24,9 +24,14 @@ SPEAKER_EMBEDDING_DIM = 192
 
 
 class MingTTS:
-    def __init__(self, model_path, device="cuda:0", text_normalization=True,
+    def __init__(self, model_path, device=None, text_normalization=True,
                  cache_prompts=True):
         from transformers import AutoTokenizer
+
+        if device is None:
+            device = "cuda" if torch.cuda.is_available() else "cpu"
+        device = torch.device(device)
+        dtype = torch.bfloat16 if device.type == "cuda" else torch.float32
 
         if os.path.isdir(model_path):
             local_path = model_path
@@ -37,8 +42,8 @@ class MingTTS:
         self.device = device
         self.local_path = local_path
         self.model = BailingMMNativeForConditionalGeneration.from_pretrained(
-            local_path, torch_dtype=torch.bfloat16, low_cpu_mem_usage=True,
-        ).eval().to(torch.bfloat16).to(device)
+            local_path, torch_dtype=dtype, low_cpu_mem_usage=True,
+        ).eval().to(device)
         # The setter validates the special tokens against the trained layout.
         self.model.tokenizer = AutoTokenizer.from_pretrained(
             local_path, trust_remote_code=True,

@@ -2,6 +2,8 @@
 # coding=utf-8
 # Copyright (c) Ant Group. All rights reserved.
 
+from contextlib import nullcontext
+
 import torch
 import torch.nn as nn
 from tqdm import tqdm
@@ -65,6 +67,12 @@ class BailingMMNativeForConditionalGeneration(PreTrainedModel):
         self.spk_head = nn.Linear(192, self.model.config.hidden_size, bias=True)
         self._tokenizer = None
         self.post_init()
+
+    def _autocast(self):
+        """Match autocast to the device the weights live on."""
+        if self.device.type == "cuda":
+            return torch.autocast(device_type="cuda", dtype=self.dtype)
+        return nullcontext()
 
     # Weight tying runs against the outermost model, so these have to be
     # delegated or ``_tied_weights_keys`` above is inert. The inner LLM ties
@@ -403,7 +411,7 @@ class BailingMMNativeForConditionalGeneration(PreTrainedModel):
         # Each inference step combines Autoregressive (AR) decoding with Flow Matching
         decode_budget = (MAX_CACHE_LEN - inputs_embeds.shape[1]) // self.patch_size
         for step in tqdm(range(min(max_decode_steps, decode_budget))):
-            with torch.autocast(device_type='cuda', dtype=torch.bfloat16):
+            with self._autocast():
                 outputs = self.model(
                     attention_mask=attention_mask,
                     position_ids=position_ids,
@@ -471,7 +479,7 @@ class BailingMMNativeForConditionalGeneration(PreTrainedModel):
 
         The encoder samples its posterior, so this consumes the global RNG.
         """
-        waveform = prompt_waveform.to(device=self.device, dtype=torch.bfloat16)
+        waveform = prompt_waveform.to(device=self.device, dtype=self.dtype)
         length = torch.tensor([waveform.size(1)], dtype=torch.long, device=self.device)
         prompt_latent, _ = self.audio.encode_latent(waveform, length)
         return prompt_latent
@@ -493,7 +501,7 @@ class BailingMMNativeForConditionalGeneration(PreTrainedModel):
         prompt_latent=None,
     ):
         sampled_tokens_list = []
-        with torch.autocast(device_type='cuda', dtype=torch.bfloat16):
+        with self._autocast():
             for sampled_tokens, _ in self.sample(
                     prompt=prompt,
                     text=text,
@@ -527,7 +535,7 @@ class BailingMMNativeForConditionalGeneration(PreTrainedModel):
         max_decode_steps=200,
     ):
         sampled_texts_list = []
-        with torch.autocast(device_type='cuda', dtype=torch.bfloat16):
+        with self._autocast():
             for sampled_tokens, last_chunk in self.sample_text(
                     prompt=prompt,
                     text=text,
