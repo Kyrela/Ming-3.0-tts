@@ -12,15 +12,20 @@ import os
 
 import torch
 import torchaudio
+from loguru import logger
 
+import prompt_contract
 import tts_tasks
 from frontend.audio_processing import trim_trailing_silence
 from frontend.text_processing import prepare_text, split_text
 from frontend.toolkit import normalize_text_kit
-from modeling_bailingmm import BailingMMNativeForConditionalGeneration
+from modeling_bailingmm import MAX_CACHE_LEN, BailingMMNativeForConditionalGeneration
 from spkemb_extractor import SpkembExtractor
 
 SPEAKER_EMBEDDING_DIM = 192
+# Leave enough room in the static cache to finish a fragment instead of
+# emitting a fraction of a second of silence.
+MIN_DECODE_STEPS = 128
 
 
 class MingTTS:
@@ -82,6 +87,16 @@ class MingTTS:
             normalizer=self._normalize_fragment if self.text_normalization else None,
         )
         return split_text(text, max_length)
+
+    def _input_token_count(self, prompt, text, instruction, num_speakers,
+                           prompt_text, prompt_latent_steps):
+        """Count the tokens the model will see for one fragment."""
+        input_ids, _, _ = prompt_contract.build_input_ids(
+            self.model.tokenizer, self.model.model_type, prompt, text,
+            num_speakers=num_speakers, instruction=instruction,
+            prompt_text=prompt_text, prompt_latent_steps=prompt_latent_steps,
+        )
+        return len(input_ids)
 
     # -- audio prompt -----------------------------------------------------
     def _pad_align(self):
@@ -261,6 +276,20 @@ class MingTTS:
             request["taskname"] == "STYLE" and len(fragments) > 1)
         chunks = []
         for index, fragment in enumerate(fragments):
+            if prompt_latent is not None:
+                cost = self._input_token_count(
+                    request["prompt"], fragment, request["instruction"],
+                    0 if spk_emb is None else len(spk_emb),
+                    prompt_text, prompt_latent.size(1),
+                )
+                if cost > MAX_CACHE_LEN - MIN_DECODE_STEPS:
+                    logger.warning(
+                        "[MingTTS] the acoustic prompt needs {} tokens, "
+                        "which leaves under {} decode steps in the {}-token "
+                        "cache; using the speaker embedding only",
+                        cost, MIN_DECODE_STEPS, MAX_CACHE_LEN,
+                    )
+                    prompt_latent, prompt_text = None, None
             chunk = self.model.generate(
                 prompt=request["prompt"],
                 text=fragment,

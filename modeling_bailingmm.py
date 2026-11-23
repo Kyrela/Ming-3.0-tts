@@ -410,6 +410,12 @@ class BailingMMNativeForConditionalGeneration(PreTrainedModel):
         past_key_values = None
         # Each inference step combines Autoregressive (AR) decoding with Flow Matching
         decode_budget = (MAX_CACHE_LEN - inputs_embeds.shape[1]) // self.patch_size
+        if decode_budget <= 0:
+            raise ValueError(
+                f"prompt is {inputs_embeds.shape[1]} tokens long, which leaves "
+                f"no decode budget in the {MAX_CACHE_LEN}-token cache; shorten "
+                "the reference audio/transcript or the text"
+            )
         for step in tqdm(range(min(max_decode_steps, decode_budget))):
             with self._autocast():
                 outputs = self.model(
