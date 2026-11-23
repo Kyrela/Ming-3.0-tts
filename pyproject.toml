@@ -1,0 +1,49 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ming-tts"
+version = "0.1.0"
+description = "Multilingual speech synthesis with free-form and paralinguistic control."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { file = "LICENSE" }
+dependencies = [
+    "torch>=2.6,<2.7",
+    "torchaudio>=2.6,<2.7",
+    "transformers==4.46.3",
+    "tokenizers",
+    "accelerate==1.3.0",
+    "huggingface_hub",
+    "numpy",
+    "soundfile>=0.12.1",
+    "tqdm",
+    "loguru",
+    "x_transformers==2.9.2",
+    "diffusers==0.33.0",
+    "onnxruntime",
+    "inflect",
+    "einops",
+    "packaging",
+]
+
+[tool.setuptools]
+py-modules = [
+    "ming_tts",
+    "modeling_bailingmm",
+    "configuration_bailingmm",
+    "tts_tasks",
+    "spkemb_extractor",
+    "prompt_contract",
+]
+packages = [
+    "frontend",
+    "frontend.talker_tn",
+    "frontend.talker_tn.re_utils",
+    "fm",
+    "audio_tokenizer",
+]
+
+[tool.setuptools.package-data]
+"frontend.talker_tn" = ["*.fst", "*.json"]
